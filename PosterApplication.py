@@ -11,6 +11,8 @@ import subprocess
 import threading
 import csv
 from pdf2image import convert_from_path
+from PIL import ImageFont
+from collections import defaultdict
 
 # --- Ensure Pillow is installed ---
 try:
@@ -312,8 +314,9 @@ def generateButton():
         toggle_on()
         return   
 
+
 def process_poster_csv(file_path, save_dir):
-    """Process poster CSV, download artwork, and generate posters with QR codes with GUI progress feedback."""
+    """Process poster CSV, download artwork, and generate posters with QR codes + item counts."""
     print(f"📂 Processing CSV: {file_path}")
 
     # --- Read CSV ---
@@ -324,6 +327,16 @@ def process_poster_csv(file_path, save_dir):
     total_rows = len(rows)
     print(f"🧾 Found {total_rows} rows in CSV\n")
 
+    # --- Count total items per shipment ---
+    shipment_totals = defaultdict(int)
+    for row in rows:
+        shipment_id = row.get("Shipment id", "").strip()
+        if shipment_id:
+            shipment_totals[shipment_id] += 1
+
+    # --- Track item index per shipment ---
+    shipment_counters = defaultdict(int)
+
     for i, row in enumerate(rows, start=1):
         itemID = row.get("Id", "").strip()
         shipment_id = row.get("Shipment id", "").strip()
@@ -331,12 +344,17 @@ def process_poster_csv(file_path, save_dir):
         artwork_url = row.get("Artwork 1 artwork file url", "").strip()
 
         if not itemID or not shipment_id or not artwork_url:
-            print(f"⚠️  Skipping row {i}: Missing one or more required fields")
+            print(f"⚠️  Skipping row {i}: Missing required fields")
             continue
 
+        # --- Determine item position ---
+        shipment_counters[shipment_id] += 1
+        item_index = shipment_counters[shipment_id]
+        total_items = shipment_totals[shipment_id]
+
         file_name = f"{shipment_id}-{shipment_item}"
-        
-        # --- Update progress bar label: downloading ---
+
+        # --- GUI progress update ---
         root.after(0, lambda i=i, total_rows=total_rows, file_name=file_name: (
             progress_label.config(text=f"Downloading {file_name} ({i}/{total_rows})")
         ))
@@ -345,91 +363,134 @@ def process_poster_csv(file_path, save_dir):
         try:
             local_file_path = os.path.join(save_dir, f"{file_name}.pdf")
             urllib.request.urlretrieve(artwork_url, local_file_path)
-            print(f"📥  Downloaded artwork to: {local_file_path}")
+            print(f"📥 Downloaded artwork to: {local_file_path}")
         except Exception as e:
-            print(f"❌  Failed to download artwork for {file_name}: {e}")
+            print(f"❌ Failed to download artwork for {file_name}: {e}")
             continue
 
-        # --- Update progress label: converting ---
+        # --- Convert / Generate poster ---
         root.after(0, lambda file_name=file_name: (
-            progress_label.config(text=f"Converting {file_name}...")
+            progress_label.config(text=f"Generating {file_name}...")
         ))
 
-        # --- Process poster ---
-        generate_dynamic_poster(local_file_path, itemID, file_name, save_dir, i, total_rows)
+        generate_dynamic_poster(
+            poster_path=local_file_path,
+            itemID=itemID,
+            shipment_id=shipment_id,
+            shipment_item=shipment_item,
+            item_index=item_index,
+            total_items=total_items,
+            file_name=file_name,
+            save_dir=save_dir,
+            index=i,
+            total=total_rows
+        )
 
-        # small delay between downloads (optional)
         time.sleep(0.25)
 
     root.after(0, lambda: progress_label.config(text="All files processed ✅"))
-    print(f"\n✅ All {total_rows} rows processed.\n")
+    print("\n✅ All posters generated.\n")
 
-
-def generate_dynamic_poster(poster_path, itemID, file_name, save_dir, index, total):
-    """Add cut line + QR code to poster, converting PDFs if necessary."""
+def generate_dynamic_poster(
+    poster_path,
+    itemID,
+    shipment_id,
+    shipment_item,
+    item_index,
+    total_items,
+    file_name,
+    save_dir,
+    index,
+    total
+):
+    """Add cut line + QR code + shipment text to poster."""
     try:
-        print(f"🖼️  [{index}/{total}] Processing poster for order: {file_name}")
-        # --- Detect and handle PDF ---
+        print(f"🖼️ [{index}/{total}] Processing poster: {file_name}")
+
+        # --- Load image or PDF ---
         if poster_path.lower().endswith(".pdf"):
-            print(f"   🧾 Converting PDF to image...")
-            
             pages = convert_from_path(poster_path, dpi=300)
-            img = pages[0]  # take first page
+            img = pages[0]
         else:
             img = Image.open(poster_path).convert("RGB")
 
-        # --- Add white background and red cut line ---
+        # --- Add white background + cut line ---
         bottom_margin = 10
         line_thickness = 10
-        template_width = img.width
-        template_height = img.height + bottom_margin
-        template_bg = Image.new("RGB", (template_width, template_height), (255, 255, 255))
 
+        template_bg = Image.new(
+            "RGB",
+            (img.width, img.height + bottom_margin),
+            (255, 255, 255)
+        )
         template_bg.paste(img, (0, 0))
 
         draw = ImageDraw.Draw(template_bg)
         draw.rectangle(
-            [0, template_bg.height - line_thickness, template_width, template_height],
+            [0, template_bg.height - line_thickness, template_bg.width, template_bg.height],
             fill=(255, 0, 0)
         )
 
-        # --- Generate and place QR code ---
-        QR_SIZE = 200  # fixed QR size in pixels
-        qr_img = qrcode.QRCode(
+        # --- QR Code ---
+        QR_SIZE = 200
+        qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_H,
             box_size=10,
             border=4
         )
-        qr_img.add_data(itemID)
-        qr_img.make(fit=True)
-        qr_rgb = qr_img.make_image(fill_color="black", back_color="white").convert("RGB")
-        qr_rgb = qr_rgb.resize((QR_SIZE, QR_SIZE), Image.Resampling.LANCZOS)
+        qr.add_data(itemID)
+        qr.make(fit=True)
 
-        combined_height = template_bg.height + qr_rgb.height + 20
+        qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+        qr_img = qr_img.resize((QR_SIZE, QR_SIZE), Image.Resampling.LANCZOS)
+
+        combined_height = template_bg.height + QR_SIZE + 20
         combined_img = Image.new("RGB", (template_bg.width, combined_height), (255, 255, 255))
         combined_img.paste(template_bg, (0, 0))
 
         qr_x = 0
         qr_y = template_bg.height + 10
-        combined_img.paste(qr_rgb, (qr_x, qr_y))
+        combined_img.paste(qr_img, (qr_x, qr_y))
 
-        # --- Save final image ---
-        output_filename = f"{file_name}_{index}.png"
-        output_path = os.path.join(save_dir, output_filename)
-        combined_img.save(output_path, dpi=(300,300))
-        print(f"✅  Saved poster: {output_path}")
+        # --- Text next to QR ---
+        draw = ImageDraw.Draw(combined_img)
+
+        try:
+            font = ImageFont.truetype("arial.ttf", 36)
+        except IOError:
+            font = ImageFont.load_default()
+
+        text_x = qr_x + QR_SIZE + 20
+        text_y = qr_y + 20
+
+        shipment_text = (
+            f"Shipment ID: {shipment_id}\n"
+            f"Item: {item_index} of {total_items}"
+        )
+
+        draw.multiline_text(
+            (text_x, text_y),
+            shipment_text,
+            fill=(0, 0, 0),
+            font=font,
+            spacing=8,
+            align="left"
+        )
+
+        # --- Save output ---
+        output_path = os.path.join(save_dir, f"{file_name}_{index}.png")
+        combined_img.save(output_path, dpi=(300, 300))
+        print(f"✅ Saved poster: {output_path}")
 
     except Exception as e:
-        print(f"❌  Error generating poster for {file_name}: {e}")
+        print(f"❌ Error processing {file_name}: {e}")
 
     finally:
-        # --- Clean up temp file ---
         try:
             os.remove(poster_path)
-            print(f"🗑️  Deleted temp file: {poster_path}\n")
-        except Exception as e:
-            print(f"⚠️  Could not delete temp file: {e}\n")
+        except Exception:
+            pass
 
 def csvUpload_click(event=None):
     """Upload CSV file and process posters with progress bar."""
