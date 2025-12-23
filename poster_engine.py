@@ -129,14 +129,17 @@ def generate_dynamic_poster(
         qr.add_data(itemID)
         qr.make(fit=True)
 
-        qr_img = qr.make_image(fill_color="black", back_color="white") \
-                   .convert("RGB") \
-                   .resize((200, 200), Image.Resampling.LANCZOS)
+        #QRCODE insert commented out for now
+        #-----------------------------------
+        #qr_img = qr.make_image(fill_color="black", back_color="white") \
+        #           .convert("RGB") \
+        #           .resize((200, 200), Image.Resampling.LANCZOS)
+        #-----------------------------------
 
-        combined_height = template_bg.height + 220
+        combined_height = template_bg.height + 50
         combined_img = Image.new("RGB", (template_bg.width, combined_height), (255, 255, 255))
         combined_img.paste(template_bg, (0, 0))
-        combined_img.paste(qr_img, (0, template_bg.height + 10))
+        # combined_img.paste(qr_img, (0, template_bg.height + 10))
 
         draw = ImageDraw.Draw(combined_img)
         try:
@@ -144,14 +147,15 @@ def generate_dynamic_poster(
         except IOError:
             font = ImageFont.load_default()
 
-        shipment_text = f"Shipment ID: {shipment_id}\nItem: {item_index} of {total_items}"
+        shipment_text = f"Shipment ID: {shipment_id}  -  Item: {item_index} of {total_items}"
 
-        draw.multiline_text(
-            (220, template_bg.height + 30),
-            shipment_text,
-            fill=(0, 0, 0),
-            font=font
-        )
+        draw.text((15, template_bg.height + 5), shipment_text, fill=(0, 0, 0), font=font)
+        #draw.multiline_text(
+        #    (220, template_bg.height + 30),
+        #    shipment_text,
+        #    fill=(0, 0, 0),
+        #    font=font
+        #
 
         output_path = os.path.join(save_dir, f"{file_name}_{index}.png")
         combined_img.save(output_path, dpi=(300, 300))
