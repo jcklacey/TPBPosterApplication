@@ -1,5 +1,6 @@
 import time
 import os
+import shutil
 import csv
 import urllib.request
 from collections import defaultdict
@@ -54,6 +55,9 @@ def process_poster_csv(file_path, save_dir, progress_callback=None):
         shipment_counters[shipment_id] += 1
         item_index = shipment_counters[shipment_id]
         total_items = shipment_totals[shipment_id]
+        
+        print("total_items comes out as: ")
+        print(total_items)
 
         file_name = f"{shipment_id}-{shipment_item}"
 
@@ -80,6 +84,8 @@ def process_poster_csv(file_path, save_dir, progress_callback=None):
         )
 
         time.sleep(0.25)
+        
+    multi_sort()    
 
     if progress_callback:
         progress_callback("All files processed ✅")
@@ -97,6 +103,7 @@ def generate_dynamic_poster(
     index,
     total
 ):
+
     try:
         if poster_path.lower().endswith(".pdf"):
             img = convert_from_path(poster_path, dpi=300)[0]
@@ -156,8 +163,12 @@ def generate_dynamic_poster(
         #    fill=(0, 0, 0),
         #    font=font
         #
-
+        
         output_path = os.path.join(save_dir, f"{file_name}_{index}.png")
+
+        if total_items > 1:
+            output_path = os.path.join(save_dir, f"{file_name}_{index}-Multi.png")
+
         combined_img.save(output_path, dpi=(300, 300))
 
     finally:
@@ -165,3 +176,17 @@ def generate_dynamic_poster(
             os.remove(poster_path)
         except Exception:
             pass
+            
+def multi_sort():
+    HOT_FOLDER = "C:/Users/jackl/OneDrive/Desktop/TPB/TPBPosterApplication/HotFolder"
+    MULTI = os.path.join(HOT_FOLDER, "Multi")
+
+    os.makedirs(MULTI, exist_ok=True)
+
+    for filename in os.listdir(HOT_FOLDER):
+        if filename.endswith("-Multi.png"):
+            src = os.path.join(HOT_FOLDER, filename)
+            dst = os.path.join(MULTI, filename)
+
+            print(f"📁 Moving {filename} → Multi/")
+            shutil.move(src, dst)
