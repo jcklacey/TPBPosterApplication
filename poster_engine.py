@@ -121,11 +121,21 @@ def generate_dynamic_poster(
         template_bg.paste(img, (0, 0))
 
         draw = ImageDraw.Draw(template_bg)
-        draw.rectangle(
-            [0, template_bg.height - line_thickness,
-             template_bg.width, template_bg.height],
-            fill=(255, 0, 0)
-        )
+        
+        y = template_bg.height - (line_thickness // 2)
+
+        dash_length = 20   # length of each dash
+        gap_length = 10    # space between dashes
+
+        x = 0
+        while x < template_bg.width:
+            draw.line(
+                (x, y, min(x + dash_length, template_bg.width), y),
+                fill=(255, 0, 0),
+                width=line_thickness
+            )
+            x += dash_length + gap_length
+        
 
         qr = qrcode.QRCode(
             version=1,
@@ -177,16 +187,3 @@ def generate_dynamic_poster(
         except Exception:
             pass
             
-def multi_sort():
-    HOT_FOLDER = "C:/Users/jackl/OneDrive/Desktop/TPB/TPBPosterApplication/HotFolder"
-    MULTI = os.path.join(HOT_FOLDER, "Multi")
-
-    os.makedirs(MULTI, exist_ok=True)
-
-    for filename in os.listdir(HOT_FOLDER):
-        if filename.endswith("-Multi.png"):
-            src = os.path.join(HOT_FOLDER, filename)
-            dst = os.path.join(MULTI, filename)
-
-            print(f"📁 Moving {filename} → Multi/")
-            shutil.move(src, dst)
