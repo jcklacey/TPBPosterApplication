@@ -7,6 +7,7 @@ from collections import defaultdict
 from PIL import Image, ImageDraw, ImageFont
 from pdf2image import convert_from_path
 import qrcode
+from datetime import datetime, timedelta
 
 Image.MAX_IMAGE_PIXELS = None  # remove the limit
 
@@ -48,6 +49,25 @@ def process_poster_csv(file_path, save_dir, progress_callback=None):
         shipment_id = row.get("Shipment id", "").strip()
         shipment_item = row.get("Shipment item number", "").strip()
         artwork_url = row.get("Artwork 1 artwork file url", "").strip()
+        
+        date_received_raw = row.get("Date received", "").strip()
+
+        due_date_str = "Due Date: N/A"
+        if date_received_raw:
+            try:
+                # Trim fractional seconds to 6 digits if present
+                if "." in date_received_raw:
+                    main, rest = date_received_raw.split(".", 1)
+                    fractional = rest.split("+", 1)[0][:6]
+                    tz = "+" + rest.split("+", 1)[1] if "+" in rest else ""
+                    date_received_raw = f"{main}.{fractional}{tz}"
+
+                received_dt = datetime.fromisoformat(date_received_raw)
+                # Add 1 day to date received to generate Due Date
+                due_dt = received_dt + timedelta(days=1)
+                due_date_str = f"Due Date: {due_dt.strftime('%d/%m/%Y')}"
+            except Exception as e:
+                print(f"⚠️ Date parse failed: {date_received_raw} → {e}")
 
         if not itemID or not shipment_id or not artwork_url:
             continue
@@ -77,6 +97,7 @@ def process_poster_csv(file_path, save_dir, progress_callback=None):
             shipment_item=shipment_item,
             item_index=item_index,
             total_items=total_items,
+            due_date_str=due_date_str,
             file_name=file_name,
             save_dir=save_dir,
             index=i,
@@ -98,6 +119,7 @@ def generate_dynamic_poster(
     shipment_item,
     item_index,
     total_items,
+    due_date_str,
     file_name,
     save_dir,
     index,
@@ -164,7 +186,11 @@ def generate_dynamic_poster(
         except IOError:
             font = ImageFont.load_default()
 
-        shipment_text = f"Shipment ID: {shipment_id}  -  Item: {item_index} of {total_items}"
+        shipment_text = (
+            f"Shipment ID: {shipment_id}  -  "
+            f"Item: {item_index} of {total_items}  -  "
+            f"{due_date_str}"
+        )
 
         draw.text((15, template_bg.height + 5), shipment_text, fill=(0, 0, 0), font=font)
         #draw.multiline_text(
