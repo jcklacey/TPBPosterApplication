@@ -6,8 +6,8 @@ from PIL import Image, ImageTk
 from poster_engine import process_poster_csv
 
 
-HOT_FOLDER = "C:/Users/jackl/OneDrive/Desktop/TPB/TPBPosterApplication/HotFolder/"
-APP_DIR = "C:/Users/jackl/OneDrive/Desktop/TPB/TPBPosterApplication/"
+HOT_FOLDER = "C:/Users/DTFPrintBar/AppData/Local/PosterEngine/HotFolder/"
+APP_DIR = "C:/Users/DTFPrintBar/AppData/Local/PosterEngine/"
 
 os.makedirs(HOT_FOLDER, exist_ok=True)
 
