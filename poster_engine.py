@@ -45,7 +45,7 @@ def process_poster_csv(file_path, save_dir, progress_callback=None):
     shipment_counters = defaultdict(int)
 
     for i, row in enumerate(rows, start=1):
-        itemID = row.get("Id", "").strip()
+        qrCode = row.get("QR code", "").strip()
         shipment_id = row.get("Shipment id", "").strip()
         shipment_item = row.get("Shipment item number", "").strip()
         artwork_url = row.get("Artwork 1 artwork file url", "").strip()
@@ -69,7 +69,7 @@ def process_poster_csv(file_path, save_dir, progress_callback=None):
             except Exception as e:
                 print(f"⚠️ Date parse failed: {date_received_raw} → {e}")
 
-        if not itemID or not shipment_id or not artwork_url:
+        if not qrCode or not shipment_id or not artwork_url:
             continue
 
         shipment_counters[shipment_id] += 1
@@ -92,7 +92,7 @@ def process_poster_csv(file_path, save_dir, progress_callback=None):
 
         generate_dynamic_poster(
             poster_path=local_file_path,
-            itemID=itemID,
+            qrCode=qrCode,
             shipment_id=shipment_id,
             shipment_item=shipment_item,
             item_index=item_index,
@@ -114,7 +114,7 @@ def process_poster_csv(file_path, save_dir, progress_callback=None):
 
 def generate_dynamic_poster(
     poster_path,
-    itemID,
+    qrCode,
     shipment_id,
     shipment_item,
     item_index,
@@ -165,20 +165,20 @@ def generate_dynamic_poster(
             box_size=10,
             border=4
         )
-        qr.add_data(itemID)
+        qr.add_data(qrCode)
         qr.make(fit=True)
 
-        #QRCODE insert commented out for now
+        #QRCODE insert
         #-----------------------------------
-        #qr_img = qr.make_image(fill_color="black", back_color="white") \
-        #           .convert("RGB") \
-        #           .resize((200, 200), Image.Resampling.LANCZOS)
+        qr_img = qr.make_image(fill_color="black", back_color="white") \
+                   .convert("RGB") \
+                   .resize((150, 150), Image.Resampling.LANCZOS)
         #-----------------------------------
 
-        combined_height = template_bg.height + 50
+        combined_height = template_bg.height + 170
         combined_img = Image.new("RGB", (template_bg.width, combined_height), (255, 255, 255))
         combined_img.paste(template_bg, (0, 0))
-        # combined_img.paste(qr_img, (0, template_bg.height + 10))
+        combined_img.paste(qr_img, (0, template_bg.height + 10))
 
         draw = ImageDraw.Draw(combined_img)
         try:
@@ -187,18 +187,21 @@ def generate_dynamic_poster(
             font = ImageFont.load_default()
 
         shipment_text = (
-            f"Shipment ID: {shipment_id}  -  "
-            f"Item: {item_index} of {total_items}  -  "
+            f"Shipment ID: {shipment_id} \n"
+            f"Item: {item_index} of {total_items} \n"
             f"{due_date_str}"
         )
 
-        draw.text((15, template_bg.height + 5), shipment_text, fill=(0, 0, 0), font=font)
-        #draw.multiline_text(
-        #    (220, template_bg.height + 30),
-        #    shipment_text,
-        #    fill=(0, 0, 0),
-        #    font=font
-        #
+        # INSERT TEXT -  as single line
+        # draw.text((15, template_bg.height + 5), shipment_text, fill=(0, 0, 0), font=font)
+        
+        # INSERT TEXT - as multiline 
+        draw.multiline_text(
+            (180, template_bg.height + 30),
+            shipment_text,
+            fill=(0, 0, 0),
+            font=font)
+        
         
         output_path = os.path.join(save_dir, f"{file_name}_{index}.png")
 
@@ -214,7 +217,7 @@ def generate_dynamic_poster(
             pass
             
 def multi_sort():
-    HOT_FOLDER = "C:/Users/DTFPrintBar/AppData/Local/PosterEngine/HotFolder/"
+    HOT_FOLDER = "C:/Users/jackl/OneDrive/Desktop/TPB/TPBPosterApplication/HotFolder/"
     MULTI = os.path.join(HOT_FOLDER, "Multi")
 
     os.makedirs(MULTI, exist_ok=True)
@@ -223,5 +226,6 @@ def multi_sort():
         if filename.endswith("-Multi.png"):
             src = os.path.join(HOT_FOLDER, filename)
             dst = os.path.join(MULTI, filename)
-
+            
             print(f"📁 Moving {filename} → Multi/")
+            shutil.move(src, dst)
