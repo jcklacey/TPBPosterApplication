@@ -25,7 +25,6 @@ def flatten_to_rgb(img, bg_colour=(255, 255, 255)):
 
     return bg
 
-
 def process_poster_csv(file_path, save_dir, progress_callback=None):
     print(f"📂 Processing CSV: {file_path}")
 
@@ -49,10 +48,11 @@ def process_poster_csv(file_path, save_dir, progress_callback=None):
         shipment_id = row.get("Shipment id", "").strip()
         shipment_item = row.get("Shipment item number", "").strip()
         artwork_url = row.get("Artwork 1 artwork file url", "").strip()
+        product_type = row.get("Product type", "").strip()
         
         date_received_raw = row.get("Date received", "").strip()
 
-        due_date_str = "Due Date: N/A"
+        due_date_str = "N/A"
         if date_received_raw:
             try:
                 # Trim fractional seconds to 6 digits if present
@@ -65,7 +65,7 @@ def process_poster_csv(file_path, save_dir, progress_callback=None):
                 received_dt = datetime.fromisoformat(date_received_raw)
                 # Add 1 day to date received to generate Due Date
                 due_dt = received_dt + timedelta(days=1)
-                due_date_str = f"Due Date: {due_dt.strftime('%d/%m/%Y')}"
+                due_date_str = f"{due_dt.strftime('%d/%m/%Y')}"
             except Exception as e:
                 print(f"⚠️ Date parse failed: {date_received_raw} → {e}")
 
@@ -85,7 +85,8 @@ def process_poster_csv(file_path, save_dir, progress_callback=None):
             progress_callback(f"Downloading {file_name} ({i}/{total_rows})")
 
         local_file_path = os.path.join(save_dir, f"{file_name}.pdf")
-        urllib.request.urlretrieve(artwork_url, local_file_path)
+        urllib.request.urlretrieve(artwork_url, local_file_path)       
+
 
         if progress_callback:
             progress_callback(f"Generating {file_name}...")
@@ -101,7 +102,8 @@ def process_poster_csv(file_path, save_dir, progress_callback=None):
             file_name=file_name,
             save_dir=save_dir,
             index=i,
-            total=total_rows
+            total=total_rows,
+            product_type=product_type
         )
 
         time.sleep(0.25)
@@ -123,7 +125,8 @@ def generate_dynamic_poster(
     file_name,
     save_dir,
     index,
-    total
+    total,
+    product_type
 ):
 
     try:
@@ -131,6 +134,20 @@ def generate_dynamic_poster(
             img = convert_from_path(poster_path, dpi=300)[0]
         else:
             img = Image.open(poster_path).convert("RGB")
+
+        ##############################
+        # TRY CROP HERE - Has to be after its downloaded and converted to 300dpi, but before we add our info down the bottom.
+        ##############################
+
+        # MM to Pixels conversion
+        # px = MM * (dpi/25.4)
+        # 4mm x (300/25.4) = 47
+        crop_px = 47
+        w, h = img.size
+        img = img.crop((crop_px, crop_px, w - crop_px, h - crop_px))
+
+        #Add in an IF statement if we need to change the crop_px based on the Poster Size (product_type)
+        ###############################
 
         bottom_margin = 10
         line_thickness = 10
@@ -170,12 +187,12 @@ def generate_dynamic_poster(
 
         #QRCODE insert
         #-----------------------------------
-        qr_img = qr.make_image(fill_color="black", back_color="white") \
+        qr_img = qr.make_image(fill_color="black", back_color="lightblue") \
                    .convert("RGB") \
-                   .resize((150, 150), Image.Resampling.LANCZOS)
+                   .resize((200, 200), Image.Resampling.LANCZOS)
         #-----------------------------------
 
-        combined_height = template_bg.height + 170
+        combined_height = template_bg.height + 220
         combined_img = Image.new("RGB", (template_bg.width, combined_height), (255, 255, 255))
         combined_img.paste(template_bg, (0, 0))
         combined_img.paste(qr_img, (0, template_bg.height + 10))
@@ -187,9 +204,10 @@ def generate_dynamic_poster(
             font = ImageFont.load_default()
 
         shipment_text = (
-            f"Shipment ID: {shipment_id} \n"
-            f"Item: {item_index} of {total_items} \n"
-            f"{due_date_str}"
+            f"Shipment ID: --- {shipment_id} \n"
+            f"Item: --- {item_index} of {total_items} \n"
+            f"Due Date: --- {due_date_str} \n"
+            f"Product Type: --- {product_type} \n"
         )
 
         # INSERT TEXT -  as single line
@@ -197,7 +215,7 @@ def generate_dynamic_poster(
         
         # INSERT TEXT - as multiline 
         draw.multiline_text(
-            (180, template_bg.height + 30),
+            (230, template_bg.height + 30),
             shipment_text,
             fill=(0, 0, 0),
             font=font)
@@ -217,7 +235,7 @@ def generate_dynamic_poster(
             pass
             
 def multi_sort():
-    HOT_FOLDER = "C:/Users/jackl/OneDrive/Desktop/TPB/TPBPosterApplication/HotFolder/"
+    HOT_FOLDER = "C:/Users/DTFPrintBar/AppData/Local/PosterEngine/HotFolder/"
     MULTI = os.path.join(HOT_FOLDER, "Multi")
 
     os.makedirs(MULTI, exist_ok=True)
